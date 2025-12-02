@@ -16,7 +16,7 @@ let currentCycleMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
 
 // --- Category Definitions (New Core Concept) ---
 const categories = [
-    "Salary",
+    "Salary", // Note: This category should only be used for Income transactions
     "Investments",
     "Side Hustle",
     "Rent",
@@ -120,6 +120,28 @@ const calculateTotals = () => {
     return { totalIncome, totalExpenses, budgetVariance, netFlow };
 };
 
+/**
+ * NEW: Calculates expense totals by category and returns sorted data.
+ */
+const calculateCategoryExpenses = () => {
+    const expenseTransactions = currentTransactions.filter(t => t.type === 'expense');
+
+    const categorySummary = expenseTransactions
+        .reduce((acc, t) => {
+            // Group by category, excluding income categories if they slipped through
+            if (t.category !== 'Salary' && t.category !== 'Side Hustle') {
+                acc[t.category] = (acc[t.category] || 0) + t.amount;
+            }
+            return acc;
+        }, {});
+
+    // Convert to array of { category, amount } objects and sort descending
+    return Object.keys(categorySummary)
+        .map(category => ({ category, amount: categorySummary[category] }))
+        .sort((a, b) => b.amount - a.amount);
+};
+
+
 // --- Action Functions (Updated) ---
 
 const saveMonthlyBudget = () => {
@@ -145,9 +167,16 @@ const addTransaction = (event) => {
     const category = form.querySelector('#transaction-category-select').value;
     const date = form.querySelector('#transaction-date-input').value;
 
-    if (!description || isNaN(amount) || amount <= 0 || !date) {
-        alert("Please ensure all fields are valid: description, positive amount, and date.");
+    if (!description || isNaN(amount) || amount <= 0 || !date || !category) {
+        alert("Please ensure all fields are valid: description, positive amount, date, and category.");
         return;
+    }
+    
+    // Simple validation for category vs transaction type (e.g., Salary shouldn't be an expense)
+    const incomeCategories = ["Salary", "Investments", "Side Hustle"];
+    if (type === 'expense' && incomeCategories.includes(category)) {
+         alert("Cannot log an EXPENSE with an INCOME-related category. Please select a correct category.");
+         return;
     }
 
     const newTransaction = {
@@ -185,12 +214,12 @@ const finalizeMonth = () => {
     }
 
     // New: Calculate spending by category for the monthly record
-    const categorySummary = currentTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((acc, t) => {
-            acc[t.category] = (acc[t.category] || 0) + t.amount;
-            return acc;
-        }, {});
+    const categorySummary = calculateCategoryExpenses(); // Use the dedicated calculation function
+    const categorySummaryObject = categorySummary.reduce((acc, item) => {
+        acc[item.category] = item.amount;
+        return acc;
+    }, {});
+
 
     const newRecord = {
         id: generateId(),
@@ -199,7 +228,7 @@ const finalizeMonth = () => {
         totalIncome: finalIncome,
         totalExpenses: finalExpenses,
         netFlow: finalNetFlow,
-        categorySummary: categorySummary,
+        categorySummary: categorySummaryObject,
         transactions: [...currentTransactions] // Archive all transactions
     };
 
@@ -227,90 +256,153 @@ const finalizeMonth = () => {
 // --- UI Rendering (Major Updates) ---
 
 /**
- * Renders the SVG Pie/Donut Chart based on Monthly Budget vs. Expenses.
+ * REPLACED: Renders a horizontal bar graph showing Budget vs. Expenses.
  */
 const renderBudgetVisualization = () => {
-    // Visualization focuses on Budget vs. Expense
-    if (monthlyBudget <= 0 && totalExpenses === 0) {
-        // Retained: Display placeholder if no data
-        const radius = 40;
-        const strokeWidth = 20;
+    const { totalExpenses: exp, budgetVariance: variance } = calculateTotals();
+    const isOver = variance < 0;
+    const monthlyBudgetDisplay = monthlyBudget;
 
+    // 1. Handle Zero/No Budget Case
+    if (monthlyBudgetDisplay <= 0 && exp === 0) {
         return `
-            <div style="display: flex; flex-direction: column; align-items: center; padding: 16px; width: 100%;">
-                <svg viewBox="0 0 100 100" width="120" height="120" style="transform: rotate(-90deg);">
-                    <circle cx="50" cy="50" r="${radius}" fill="transparent" stroke="var(--olive-tint)" stroke-width="${strokeWidth}"/>
-                    <g transform="rotate(90 50 50)">
-                        <text x="50" y="45" text-anchor="middle" dominant-baseline="middle" style="font-size: 7px; font-weight: bold; fill: var(--light-text); opacity: 0.6;">
-                            ₱0.00
-                        </text>
-                        <text x="50" y="55" text-anchor="middle" dominant-baseline="middle" style="font-size: 5px; font-weight: 600; fill: var(--light-text); opacity: 0.6;">
-                            BUDGET
-                        </text>
-                    </g>
-                </svg>
-                <p style="margin-top: 16px; text-align: center; font-size: 0.875rem; font-weight: 600; color: var(--light-text); opacity: 0.7;">
-                    Set your monthly budget to start tracking.
-                </p>
+            <div style="text-align: center; padding: 24px; width: 100%;">
+                <h3 style="color: var(--primary-orange);">Monthly Budget Not Set</h3>
+                <p style="opacity: 0.8;">Set your monthly expense budget in the sidebar to view utilization.</p>
             </div>
         `;
     }
 
-    const { budgetVariance } = calculateTotals();
-    const isOver = budgetVariance < 0;
-    const spentPercentage = monthlyBudget > 0 ? (totalExpenses / monthlyBudget) * 100 : (totalExpenses > 0 ? 100 : 0);
+    // 2. Calculate percentages and define colors
+    const spentPercentage = monthlyBudgetDisplay > 0 ? (exp / monthlyBudgetDisplay) * 100 : (exp > 0 ? 100 : 0);
     const normalizedSpent = Math.min(100, spentPercentage);
+    const overspentAmount = Math.abs(variance);
+    const remainingAmount = variance;
 
-    const radius = 40;
-    const strokeWidth = 20;
+    const spentColor = 'var(--expense-color)';
+    const overColor = 'var(--primary-orange)';
+    const remainingColor = 'var(--income-color)';
 
-    const circumference = 2 * Math.PI * radius;
-    const spentStroke = (normalizedSpent / 100) * circumference;
+    const varianceLabel = isOver 
+        ? `<span style="color: ${overColor}; font-weight: 700;">- ${formatCurrency(overspentAmount)} OVER BUDGET</span>`
+        : `<span style="color: ${remainingColor}; font-weight: 700;">${formatCurrency(remainingAmount)} REMAINING</span>`;
+    
+    // 3. Build HTML Markup for the Horizontal Bar Chart
+    let barMarkup;
+    if (isOver) {
+         // If over budget, show a full bar for budget, and indicate overspent amount below/next to it
+        barMarkup = `
+            <div style="height: 20px; background-color: ${spentColor}; width: 100%; border-radius: 4px; position: relative;">
+                 <span style="
+                    position: absolute; 
+                    top: 50%; 
+                    right: 8px; 
+                    transform: translateY(-50%); 
+                    font-size: 0.8rem; 
+                    font-weight: 800; 
+                    color: var(--light-text); 
+                    text-shadow: 1px 1px 2px #000;
+                    z-index: 20;
+                ">
+                    100%
+                </span>
+            </div>
+            <p style="text-align: left; font-size: 0.8rem; margin-top: 4px; color: ${overColor}; font-weight: 600;">
+                 ${(spentPercentage).toFixed(1)}% of budget spent. (Exceeded budget amount).
+            </p>
+        `;
+    } else {
+        // Normal scenario: Expenses within budget
+        barMarkup = `
+            <div style="height: 20px; background-color: var(--olive-tint); width: 100%; border-radius: 4px; position: relative;">
+                <div style="
+                    height: 100%;
+                    width: ${normalizedSpent.toFixed(1)}%;
+                    background-color: ${spentColor};
+                    border-radius: 4px;
+                    transition: width 0.5s;
+                "></div>
+                <span style="
+                    position: absolute; 
+                    top: 50%; 
+                    /* Position text near the end of the bar, but ensuring visibility */
+                    left: ${Math.max(10, normalizedSpent.toFixed(1) - 5)}%; 
+                    transform: translateY(-50%); 
+                    font-size: 0.8rem; 
+                    font-weight: 800; 
+                    color: var(--light-text); 
+                    text-shadow: 1px 1px 2px #000;
+                    z-index: 20;
+                ">
+                    ${normalizedSpent.toFixed(1)}%
+                </span>
+            </div>
+        `;
+    }
 
-    const spentColorHex = 'var(--expense-color)';
-    const remainingColorHex = 'var(--income-color)'; // Use income color for remaining/surplus
-
-    const centerText = isOver ? 'BUDGET DEFICIT' : `${Math.round(spentPercentage)}% SPENT`;
-    const bottomText = isOver
-        ? `DEFICIT: ${formatCurrency(budgetVariance)}`
-        : `SURPLUS: ${formatCurrency(budgetVariance)}`;
-
-    const centerTextColor = isOver ? 'var(--expense-color)' : 'var(--light-text)';
-    const bottomTextColor = isOver ? 'var(--expense-color)' : 'var(--income-color)';
-
-    // Adjust stroke and color for budget vs. expense
-    const svgMarkup = `
-        <svg viewBox="0 0 100 100" width="100%" height="auto" style="max-height: 200px; transform: rotate(-90deg); flex-shrink: 0;">
-            
-            <circle cx="50" cy="50" r="${radius}" fill="transparent" 
-                    stroke="${isOver ? 'var(--olive-tint)' : remainingColorHex}" 
-                    stroke-width="${strokeWidth}" />
-            
-            <circle cx="50" cy="50" r="${radius}" fill="transparent" stroke="${spentColorHex}" stroke-width="${strokeWidth}"
-                    stroke-dasharray="${spentStroke} ${circumference}" stroke-dashoffset="0" stroke-linecap="butt" />
-
-            <g transform="rotate(90 50 50)">
-                <text x="50" y="48" text-anchor="middle" dominant-baseline="middle" 
-                    style="font-size: 7px; font-weight: bold; fill: ${centerTextColor};">
-                    ${centerText}
-                </text>
-                <text x="50" y="58" text-anchor="middle" dominant-baseline="middle" 
-                    style="font-size: 6px; font-weight: 600; fill: var(--light-text); opacity: 0.7;">
-                    ${formatCurrency(totalExpenses)} / ${formatCurrency(monthlyBudget)}
-                </text>
-            </g>
-        </svg>
-    `;
 
     return `
-        <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
-            ${svgMarkup}
-            <p style="padding-top: 8px; text-align: center; font-size: 1rem; font-weight: 700; color: ${bottomTextColor};">
-                ${bottomText}
+        <div style="display: flex; flex-direction: column; width: 100%; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 0.9rem; font-weight: 600;">Budget: ${formatCurrency(monthlyBudgetDisplay)}</span>
+                <span style="font-size: 0.9rem; font-weight: 600;">Expenses: ${formatCurrency(exp)}</span>
+            </div>
+
+            ${barMarkup}
+
+            <p style="text-align: center; font-size: 1rem; font-weight: 700; margin-top: 16px;">
+                ${varianceLabel}
             </p>
         </div>
     `;
 };
+
+
+/**
+ * NEW: Renders the horizontal bar chart for category expenses.
+ */
+const renderCategoryBreakdownChart = () => {
+    const sortedExpenses = calculateCategoryExpenses();
+    const totalExpensesValue = totalExpenses; // Calculated total expenses from state
+
+    if (sortedExpenses.length === 0) {
+        return `
+            <div style="text-align: center; padding: 24px; color: var(--subtle-gray); opacity: 0.7;">
+                <p>Log expenses to see the category breakdown chart here.</p>
+            </div>
+        `;
+    }
+
+    const chartBars = sortedExpenses.map(item => {
+        // Calculate bar width relative to total expenses
+        const percentage = totalExpensesValue > 0 ? (item.amount / totalExpensesValue) * 100 : 0;
+        
+        return `
+            <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px;">
+                    <span style="font-weight: 600;">${item.category}</span>
+                    <span style="font-weight: 700; color: var(--expense-color);">${formatCurrency(item.amount)}</span>
+                </div>
+                <div style="height: 10px; background-color: var(--olive-tint); border-radius: 5px;">
+                    <div style="
+                        height: 100%;
+                        width: ${percentage.toFixed(1)}%;
+                        background-color: var(--primary-orange);
+                        border-radius: 5px;
+                        transition: width 0.5s;
+                    " title="${percentage.toFixed(1)}% of total expenses"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div id="category-chart-container" style="padding-top: 8px;">
+            ${chartBars}
+        </div>
+    `;
+};
+
 
 /**
  * Main render function to update the entire application UI structure.
@@ -336,7 +428,7 @@ const renderApp = () => {
             </div>
             <div id="summary-grid">
                 <div class="summary-item budget-item">
-                    <h2>MONTHLY BUDGET</h2>
+                    <h2>MONTHLY EXPENSE BUDGET</h2>
                     <p id="total-budget-display">
                         ${formatCurrency(monthlyBudget)}
                     </p>
@@ -411,6 +503,9 @@ const renderActiveView = () => {
         document.getElementById('transaction-date-input').value = new Date().toISOString().split('T')[0];
 
         document.getElementById('finalize-month-btn').addEventListener('click', finalizeMonth);
+        
+        // Render the category chart and transaction list
+        document.getElementById('category-breakdown-container').innerHTML = renderCategoryBreakdownChart();
         renderTransactionHistory();
 
     } else {
@@ -443,6 +538,9 @@ const renderCurrentMonthManager = () => {
     const categoryOptions = categories.map(cat => 
         `<option value="${cat}">${cat}</option>`
     ).join('');
+    
+    // Default selected category for expense
+    const defaultExpenseCategory = categories.find(cat => cat === 'Groceries');
 
     return `
         <div id="current-dashboard-grid">
@@ -471,7 +569,7 @@ const renderCurrentMonthManager = () => {
                             min="0.01" step="0.01" required />
                         
                         <select id="transaction-category-select" required>
-                            <option value="" disabled selected>Select Category</option>
+                            <option value="" disabled>Select Category</option>
                             ${categoryOptions}
                         </select>
                         
@@ -483,6 +581,13 @@ const renderCurrentMonthManager = () => {
                     </form>
                 </section>
 
+                <section class="card" id="category-breakdown-card">
+                    <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--olive-tint); padding-bottom: 8px;">
+                        Category Spending Breakdown (Ranked)
+                    </h2>
+                    <div id="category-breakdown-container">
+                        </div>
+                </section>
                 <section class="card" id="transaction-history-card" style="flex-grow: 1;">
                     <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--olive-tint); padding-bottom: 8px;">
                         Transaction Log (Current Month)
@@ -640,7 +745,7 @@ const renderMonthlyHistory = () => {
                 const displayMonth = new Date(record.month + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
                 // Format category summary for display
-                const categoryList = Object.entries(record.categorySummary)
+                const categoryList = Object.entries(record.categorySummary || {}) // Added null check for old records
                     .sort(([, a], [, b]) => b - a) // Sort by amount descending
                     .map(([category, amount]) => `
                         <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.85rem;">
@@ -665,7 +770,7 @@ const renderMonthlyHistory = () => {
                             <div>Variance: <strong style="color: ${record.startingBudget - record.totalExpenses >= 0 ? 'var(--income-color)' : 'var(--expense-color)'};">${formatCurrency(record.startingBudget - record.totalExpenses)}</strong></div>
                         </div>
                         <details>
-                            <summary style="cursor:pointer; color:var(--primary-orange); font-size:0.9rem; font-weight:600;">View Category Summary (${Object.keys(record.categorySummary).length} categories)</summary>
+                            <summary style="cursor:pointer; color:var(--primary-orange); font-size:0.9rem; font-weight:600;">View Category Summary (${Object.keys(record.categorySummary || {}).length} categories)</summary>
                             <div style="margin-top:12px; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px;">
                                 <h4 style="margin-top:0; color:var(--light-text); font-size:1rem; border-bottom:1px solid var(--subtle-gray);">Expense Breakdown</h4>
                                 ${categoryList}
