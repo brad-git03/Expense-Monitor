@@ -1,37 +1,43 @@
-// --- Configuration Keys (Updated for Monthly Cycle) ---
-const BUDGET_KEY = 'monitorApp_monthly_budget';
+// --- Configuration Keys (Updated for Category Budgets) ---
+const CATEGORY_BUDGETS_KEY = 'monitorApp_category_budgets'; // New key for category budgets
 const TRANSACTIONS_KEY = 'monitorApp_current_transactions';
 const MONTHLY_RECORDS_KEY = 'monitorApp_monthly_history';
-const CURRENT_CYCLE_MONTH_KEY = 'monitorApp_current_cycle_month'; // YYYY-MM format
+const CURRENT_CYCLE_MONTH_KEY = 'monitorApp_current_cycle_month';
 
 // --- Global State Variables (Updated) ---
-let monthlyBudget = 0; // New: Total budget for the current cycle
-let currentTransactions = []; // Updated: Stores all income and expenses
-let monthlyRecords = []; // Updated: Stores archived monthly summaries
+let categoryBudgets = {}; // Stores budgets: { "Administrative": 5000, "Rent / Lease": 15000, ... }
+let currentTransactions = []; 
+let monthlyRecords = []; 
 let totalIncome = 0;
 let totalExpenses = 0;
-let netFlow = 0; // New: totalIncome - totalExpenses
+let netFlow = 0; 
+let totalBudget = 0; // Derived from summing categoryBudgets
 let currentView = 'current';
-let currentCycleMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+let currentCycleMonth = new Date().toISOString().substring(0, 7); 
 
-// --- Category Definitions (New Core Concept) ---
-const categories = [
-    "Salary", // Note: This category should only be used for Income transactions
-    "Investments",
-    "Side Hustle",
-    "Rent",
-    "Groceries",
-    "Transportation",
-    "Entertainment",
-    "Utilities",
-    "Subscriptions",
-    "Other"
+// --- Category Definitions (Retained) ---
+const INCOME_CATEGORIES = [
+    "Sales / Revenue",
+    "Other Income"
 ];
 
-// --- DOM Elements ---
+const EXPENSE_CATEGORIES = [
+    "Inventory Cost / Service Cost",
+    "Administrative",
+    "Rent / Lease",
+    "Marketing",
+    "Salaries & Benefits",
+    "Transportation / Logistics"
+];
+
+const ALL_CATEGORIES = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+
+// --- DOM Elements (Retained) ---
 const appContainer = document.getElementById('app-container');
 
+// ----------------------------------------------------------------------
 // --- Helper Functions (Updated) ---
+// ----------------------------------------------------------------------
 
 /**
  * Formats a number as Philippine Peso (PHP) currency.
@@ -51,11 +57,22 @@ const formatCurrency = (amount) => {
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
 /**
- * Loads data from localStorage. (Updated for new structure)
+ * Loads data from localStorage. (Updated to load categoryBudgets)
  */
 const loadData = () => {
-    monthlyBudget = parseFloat(localStorage.getItem(BUDGET_KEY) || 0);
     currentCycleMonth = localStorage.getItem(CURRENT_CYCLE_MONTH_KEY) || new Date().toISOString().substring(0, 7);
+
+    // Load Category Budgets
+    try {
+        categoryBudgets = JSON.parse(localStorage.getItem(CATEGORY_BUDGETS_KEY) || '{}');
+        // Ensure budgets are parsed as numbers
+        for (const cat in categoryBudgets) {
+            categoryBudgets[cat] = parseFloat(categoryBudgets[cat]);
+        }
+    } catch (e) {
+        console.error("Error loading category budgets:", e);
+        categoryBudgets = {};
+    }
 
     const loadArray = (key) => {
         try {
@@ -63,9 +80,8 @@ const loadData = () => {
             return rawData.map(t => ({
                 ...t,
                 amount: parseFloat(t.amount),
-                // Ensure all core fields exist
                 type: t.type || 'expense', 
-                category: t.category || 'Other',
+                category: t.category && ALL_CATEGORIES.includes(t.category) ? t.category : (t.type === 'income' ? 'Other Income' : 'Administrative'),
                 date: t.date || new Date().toISOString().split('T')[0],
                 createdAt: t.createdAt || new Date().toISOString()
             }));
@@ -80,13 +96,12 @@ const loadData = () => {
 };
 
 /**
- * Saves all current state data to localStorage.
+ * Saves all current state data to localStorage. (Updated to save categoryBudgets)
  */
 const saveData = () => {
-    localStorage.setItem(BUDGET_KEY, monthlyBudget.toString());
+    localStorage.setItem(CATEGORY_BUDGETS_KEY, JSON.stringify(categoryBudgets)); // Save category budgets
     localStorage.setItem(CURRENT_CYCLE_MONTH_KEY, currentCycleMonth);
 
-    // Sort by date then createdAt
     const sortedTransactions = currentTransactions.sort((a, b) => {
         if (a.date !== b.date) {
             return new Date(b.date) - new Date(a.date);
@@ -100,7 +115,7 @@ const saveData = () => {
 };
 
 /**
- * Calculates total income, expenses, and net flow for the current cycle. (Updated)
+ * Calculates total income, expenses, and net flow for the current cycle. (Updated to derive totalBudget)
  */
 const calculateTotals = () => {
     totalIncome = currentTransactions
@@ -110,51 +125,79 @@ const calculateTotals = () => {
     totalExpenses = currentTransactions
         .filter(t => t.type === 'expense')
         .reduce((sum, t) => sum + t.amount, 0);
-
-    // Budget Variance calculation: Monthly Budget - Total Expenses (Income not directly involved in budget variance)
-    const budgetVariance = monthlyBudget - totalExpenses;
+        
+    // NEW: Calculate Total Budget by summing up all category budgets
+    totalBudget = EXPENSE_CATEGORIES.reduce((sum, category) => sum + (categoryBudgets[category] || 0), 0);
+    
+    // Total Budget Variance (Overall)
+    const totalBudgetVariance = totalBudget - totalExpenses;
     
     // Net Flow calculation: Total Income - Total Expenses
     netFlow = totalIncome - totalExpenses;
 
-    return { totalIncome, totalExpenses, budgetVariance, netFlow };
+    return { totalIncome, totalExpenses, totalBudget, totalBudgetVariance, netFlow };
 };
 
 /**
- * NEW: Calculates expense totals by category and returns sorted data.
+ * Calculates expense totals by category and returns sorted data. (Retained)
  */
 const calculateCategoryExpenses = () => {
     const expenseTransactions = currentTransactions.filter(t => t.type === 'expense');
 
     const categorySummary = expenseTransactions
         .reduce((acc, t) => {
-            // Group by category, excluding income categories if they slipped through
-            if (t.category !== 'Salary' && t.category !== 'Side Hustle') {
+            if (EXPENSE_CATEGORIES.includes(t.category)) {
                 acc[t.category] = (acc[t.category] || 0) + t.amount;
             }
             return acc;
         }, {});
 
-    // Convert to array of { category, amount } objects and sort descending
-    return Object.keys(categorySummary)
-        .map(category => ({ category, amount: categorySummary[category] }))
-        .sort((a, b) => b.amount - a.amount);
+    // Include all expense categories, even those with zero spending/budget
+    return EXPENSE_CATEGORIES.map(category => {
+        const spent = categorySummary[category] || 0;
+        const budget = categoryBudgets[category] || 0;
+        const variance = budget - spent;
+        
+        return { 
+            category, 
+            amountSpent: spent, 
+            budget: budget, 
+            variance: variance 
+        };
+    }).sort((a, b) => b.amountSpent - a.amountSpent);
 };
 
 
-// --- Action Functions (Updated) ---
+// ----------------------------------------------------------------------
+// --- Action Functions (New: saveCategoryBudgets) ---
+// ----------------------------------------------------------------------
 
-const saveMonthlyBudget = () => {
-    const input = document.getElementById('new-budget-input');
-    const newBudget = parseFloat(input.value);
+/**
+ * NEW: Saves or updates category budgets from the form.
+ */
+const saveCategoryBudgets = (event) => {
+    event.preventDefault();
+    const form = event.target;
+    let newBudgets = { ...categoryBudgets };
+    let valid = true;
 
-    if (isNaN(newBudget) || newBudget < 0) {
-        alert("Please enter a valid non-negative number for the monthly budget.");
-        return;
+    EXPENSE_CATEGORIES.forEach(category => {
+        const input = form.querySelector(`#budget-input-${category.replace(/[^a-zA-Z0-9]/g, '')}`);
+        if (input) {
+            const amount = parseFloat(input.value) || 0;
+            if (isNaN(amount) || amount < 0) {
+                alert(`Please enter a valid non-negative number for ${category}.`);
+                valid = false;
+            }
+            newBudgets[category] = amount;
+        }
+    });
+
+    if (valid) {
+        categoryBudgets = newBudgets;
+        renderApp();
+        renderCategoryBudgetSetter(false); // Switch back to read view
     }
-
-    monthlyBudget = newBudget;
-    renderApp();
 };
 
 const addTransaction = (event) => {
@@ -172,12 +215,16 @@ const addTransaction = (event) => {
         return;
     }
     
-    // Simple validation for category vs transaction type (e.g., Salary shouldn't be an expense)
-    const incomeCategories = ["Salary", "Investments", "Side Hustle"];
-    if (type === 'expense' && incomeCategories.includes(category)) {
-         alert("Cannot log an EXPENSE with an INCOME-related category. Please select a correct category.");
+    // VALIDATION LOGIC (Retained)
+    if (type === 'expense' && !EXPENSE_CATEGORIES.includes(category)) {
+         alert(`Error: Cannot log an EXPENSE with an INCOME category (${category}). Please select a valid Expense category.`);
          return;
     }
+    if (type === 'income' && !INCOME_CATEGORIES.includes(category)) {
+         alert(`Error: Cannot log an INCOME with an EXPENSE category (${category}). Please select a valid Income category.`);
+         return;
+    }
+    // ----------------------------
 
     const newTransaction = {
         id: generateId(),
@@ -194,6 +241,10 @@ const addTransaction = (event) => {
     // Reset form fields
     form.reset();
     form.querySelector('#transaction-date-input').value = new Date().toISOString().split('T')[0];
+    form.querySelector('#transaction-category-select').selectedIndex = 0; 
+    form.querySelector('input[name="transaction-type"][value="expense"]').checked = true;
+    
+    updateCategoryDropdown('expense'); 
 
     renderApp();
 };
@@ -207,16 +258,21 @@ const deleteTransaction = (id) => {
 };
 
 const finalizeMonth = () => {
-    const { totalIncome: finalIncome, totalExpenses: finalExpenses, netFlow: finalNetFlow } = calculateTotals();
+    const { totalIncome: finalIncome, totalExpenses: finalExpenses, netFlow: finalNetFlow, totalBudget: finalBudget } = calculateTotals();
 
     if (!confirm(`Finalize cycle for ${currentCycleMonth}? This archives all current data.`)) {
         return;
     }
 
-    // New: Calculate spending by category for the monthly record
-    const categorySummary = calculateCategoryExpenses(); // Use the dedicated calculation function
-    const categorySummaryObject = categorySummary.reduce((acc, item) => {
-        acc[item.category] = item.amount;
+    // Capture category budget variance at the time of archival
+    const categorySummaryArray = calculateCategoryExpenses();
+    const categorySummaryObject = categorySummaryArray.reduce((acc, item) => {
+        // Only store budget, spent, and variance, indexed by category
+        acc[item.category] = {
+            budget: item.budget,
+            spent: item.amountSpent,
+            variance: item.variance
+        };
         return acc;
     }, {});
 
@@ -224,27 +280,27 @@ const finalizeMonth = () => {
     const newRecord = {
         id: generateId(),
         month: currentCycleMonth,
-        startingBudget: monthlyBudget,
+        startingBudget: finalBudget, // Save the aggregate budget
         totalIncome: finalIncome,
         totalExpenses: finalExpenses,
         netFlow: finalNetFlow,
-        categorySummary: categorySummaryObject,
-        transactions: [...currentTransactions] // Archive all transactions
+        categorySummary: categorySummaryObject, // Now stores detailed budget/spent/variance
+        transactions: [...currentTransactions]
     };
 
     monthlyRecords.unshift(newRecord);
 
     // Reset for new month
-    monthlyBudget = 0;
+    categoryBudgets = {}; // Reset category budgets
     currentTransactions = [];
 
-    // Set next cycle month to the 1st day of the next month
+    // Set next cycle month
     const currentMonthDate = new Date(currentCycleMonth);
     const nextMonth = new Date(currentMonthDate.setMonth(currentMonthDate.getMonth() + 1));
     currentCycleMonth = nextMonth.toISOString().substring(0, 7);
 
     renderApp();
-    renderBudgetSetter(true);
+    renderCategoryBudgetSetter(true);
 
     const container = document.getElementById('finalize-status');
     if (container) {
@@ -253,22 +309,74 @@ const finalizeMonth = () => {
     }
 };
 
-// --- UI Rendering (Major Updates) ---
+// ----------------------------------------------------------------------
+// --- UI RENDERING (MAJOR UPDATES) ---
+// ----------------------------------------------------------------------
 
 /**
- * REPLACED: Renders a horizontal bar graph showing Budget vs. Expenses.
+ * Updates the category dropdown options based on transaction type. (Retained)
+ */
+const updateCategoryDropdown = (type) => {
+    const selectElement = document.getElementById('transaction-category-select');
+    if (!selectElement) return;
+
+    let categoriesToDisplay = [];
+    let optgroupLabel = '';
+    let categoryType = '';
+
+    if (type === 'income') {
+        categoriesToDisplay = INCOME_CATEGORIES;
+        optgroupLabel = 'INCOME Categories';
+        categoryType = 'income';
+    } else { 
+        categoriesToDisplay = EXPENSE_CATEGORIES;
+        optgroupLabel = 'EXPENSE Categories';
+        categoryType = 'expense';
+    }
+
+    const optionsMarkup = categoriesToDisplay.map(cat => {
+        const color = categoryType === 'income' ? 'var(--income-color)' : 'var(--expense-color)';
+        return `<option value="${cat}" style="color: ${color};">${cat}</option>`;
+    }).join('');
+
+    selectElement.innerHTML = `
+        <option value="" disabled selected>Select Category</option>
+        <optgroup label="${optgroupLabel}">
+            ${optionsMarkup}
+        </optgroup>
+    `;
+};
+
+
+/**
+ * Attaches event listeners to the Income/Expense radio buttons. (Retained)
+ */
+const setupTransactionTypeListener = () => {
+    const radioButtons = document.querySelectorAll('input[name="transaction-type"]');
+    radioButtons.forEach(radio => {
+        radio.addEventListener('change', (event) => {
+            updateCategoryDropdown(event.target.value);
+        });
+    });
+    
+    updateCategoryDropdown(document.querySelector('input[name="transaction-type"]:checked').value);
+};
+
+
+/**
+ * Renders a horizontal bar graph showing Total Budget vs. Total Expenses. (Updated Logic)
  */
 const renderBudgetVisualization = () => {
-    const { totalExpenses: exp, budgetVariance: variance } = calculateTotals();
+    const { totalExpenses: exp, totalBudget: budget, totalBudgetVariance: variance } = calculateTotals();
     const isOver = variance < 0;
-    const monthlyBudgetDisplay = monthlyBudget;
+    const monthlyBudgetDisplay = budget;
 
     // 1. Handle Zero/No Budget Case
     if (monthlyBudgetDisplay <= 0 && exp === 0) {
         return `
             <div style="text-align: center; padding: 24px; width: 100%;">
-                <h3 style="color: var(--primary-orange);">Monthly Budget Not Set</h3>
-                <p style="opacity: 0.8;">Set your monthly expense budget in the sidebar to view utilization.</p>
+                <h3 style="color: var(--primary-orange);">Category Budgets Not Set</h3>
+                <p style="opacity: 0.8;">Set your category budgets in the sidebar to view utilization.</p>
             </div>
         `;
     }
@@ -290,7 +398,7 @@ const renderBudgetVisualization = () => {
     // 3. Build HTML Markup for the Horizontal Bar Chart
     let barMarkup;
     if (isOver) {
-         // If over budget, show a full bar for budget, and indicate overspent amount below/next to it
+         // If over budget, show a full bar for budget
         barMarkup = `
             <div style="height: 20px; background-color: ${spentColor}; width: 100%; border-radius: 4px; position: relative;">
                  <span style="
@@ -325,7 +433,6 @@ const renderBudgetVisualization = () => {
                 <span style="
                     position: absolute; 
                     top: 50%; 
-                    /* Position text near the end of the bar, but ensuring visibility */
                     left: ${Math.max(10, normalizedSpent.toFixed(1) - 5)}%; 
                     transform: translateY(-50%); 
                     font-size: 0.8rem; 
@@ -344,8 +451,8 @@ const renderBudgetVisualization = () => {
     return `
         <div style="display: flex; flex-direction: column; width: 100%; padding: 12px 0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="font-size: 0.9rem; font-weight: 600;">Budget: ${formatCurrency(monthlyBudgetDisplay)}</span>
-                <span style="font-size: 0.9rem; font-weight: 600;">Expenses: ${formatCurrency(exp)}</span>
+                <span style="font-size: 0.9rem; font-weight: 600;">Total Budget: ${formatCurrency(monthlyBudgetDisplay)}</span>
+                <span style="font-size: 0.9rem; font-weight: 600;">Total Expenses: ${formatCurrency(exp)}</span>
             </div>
 
             ${barMarkup}
@@ -359,44 +466,139 @@ const renderBudgetVisualization = () => {
 
 
 /**
- * NEW: Renders the horizontal bar chart for category expenses.
+ * Renders the Category Budget Setter card. (NEW)
+ */
+const renderCategoryBudgetSetter = (isEditing = false) => {
+    const container = document.getElementById('budget-setter-card');
+    if (!container) return;
+    
+    const { totalBudget } = calculateTotals();
+    const totalBudgetDisplay = formatCurrency(totalBudget);
+
+    if (isEditing) {
+        const inputFields = EXPENSE_CATEGORIES.map(category => {
+            const safeId = category.replace(/[^a-zA-Z0-9]/g, '');
+            const currentValue = categoryBudgets[category] !== undefined ? categoryBudgets[category].toFixed(2) : '0.00';
+            
+            return `
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 0.9rem; display: block; margin-bottom: 4px; font-weight: 600;">${category}</label>
+                    <input type="number" id="budget-input-${safeId}" 
+                           placeholder="Budget for ${category}" 
+                           value="${currentValue}" 
+                           min="0" step="0.01" required />
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--olive-tint); padding-bottom: 8px;">
+                Set Category Budgets
+            </h2>
+            <form id="set-budget-form">
+                <div style="max-height: 250px; overflow-y: auto; padding-right: 10px; margin-bottom: 16px;">
+                    ${inputFields}
+                </div>
+                <button type="submit" class="btn btn-success" style="width: 100%;">Save All Budgets</button>
+            </form>
+        `;
+        document.getElementById('set-budget-form').addEventListener('submit', saveCategoryBudgets);
+        
+    } else {
+        // Read-only view
+        const budgetList = EXPENSE_CATEGORIES.map(category => {
+            const budget = categoryBudgets[category] || 0;
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9rem; padding: 4px 0; border-bottom: 1px dashed var(--olive-tint);">
+                    <span>${category}</span>
+                    <span style="font-weight:bold;">${formatCurrency(budget)}</span>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h2 style="font-size: 0.9rem; opacity:0.7; margin-bottom:4px;">TOTAL MONTHLY BUDGET</h2>
+                    <div style="font-size: 1.5rem; font-weight:bold; color:var(--primary-orange);">${totalBudgetDisplay}</div>
+                </div>
+                <button id="edit-budget-btn" class="btn btn-primary">Edit</button>
+            </div>
+            <div style="margin-top: 15px; max-height: 150px; overflow-y: auto;">
+                ${budgetList}
+            </div>
+        `;
+        document.getElementById('edit-budget-btn').addEventListener('click', () => renderCategoryBudgetSetter(true));
+    }
+};
+
+
+/**
+ * Renders the horizontal bar chart for category expenses. (Updated to include budget and variance)
  */
 const renderCategoryBreakdownChart = () => {
     const sortedExpenses = calculateCategoryExpenses();
-    const totalExpensesValue = totalExpenses; // Calculated total expenses from state
+    const totalBudget = calculateTotals().totalBudget; // Overall Total Budget Display
 
-    if (sortedExpenses.length === 0) {
+    if (sortedExpenses.length === 0 || totalBudget === 0) {
         return `
             <div style="text-align: center; padding: 24px; color: var(--subtle-gray); opacity: 0.7;">
-                <p>Log expenses to see the category breakdown chart here.</p>
+                <p>Set category budgets and log expenses to see the breakdown.</p>
             </div>
         `;
     }
 
     const chartBars = sortedExpenses.map(item => {
-        // Calculate bar width relative to total expenses
-        const percentage = totalExpensesValue > 0 ? (item.amount / totalExpensesValue) * 100 : 0;
+        const { category, amountSpent, budget, variance } = item;
+        
+        // 1. Calculate bar width relative to the CATEGORY's budget
+        const spentPercentageOfBudget = budget > 0 ? (amountSpent / budget) * 100 : (amountSpent > 0 ? 100 : 0);
+        const normalizedSpent = Math.min(100, spentPercentageOfBudget);
+        
+        // 2. Determine variance display
+        const isOverspent = variance < 0;
+        const varianceText = isOverspent ? 
+            `<span style="color: var(--primary-orange);">- ${formatCurrency(variance)} Over</span>` :
+            `<span style="color: var(--success-complement);">${formatCurrency(variance)} Left</span>`;
+
+        // 3. Determine bar color
+        const spentColor = isOverspent ? 'var(--primary-orange)' : 'var(--expense-color)';
+        
+        // If over budget, the bar represents 100% of the category budget, but the background highlights it's 100% full.
+        const barWidth = isOverspent ? '100%' : `${normalizedSpent.toFixed(1)}%`;
+        const barContainerBg = isOverspent ? 'var(--primary-orange)' : 'var(--olive-tint)';
+        const barActualFill = isOverspent ? 'var(--hover-orange)' : spentColor;
         
         return `
-            <div style="margin-bottom: 12px;">
+            <div style="margin-bottom: 18px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px;">
-                    <span style="font-weight: 600;">${item.category}</span>
-                    <span style="font-weight: 700; color: var(--expense-color);">${formatCurrency(item.amount)}</span>
+                    <span style="font-weight: 600;">${category}</span>
+                    <span style="font-weight: 700;">
+                        Spent: ${formatCurrency(amountSpent)} / Budget: ${formatCurrency(budget)}
+                    </span>
                 </div>
-                <div style="height: 10px; background-color: var(--olive-tint); border-radius: 5px;">
+                
+                <div style="height: 12px; background-color: ${barContainerBg}; border-radius: 5px; position: relative; overflow: hidden;">
                     <div style="
                         height: 100%;
-                        width: ${percentage.toFixed(1)}%;
-                        background-color: var(--primary-orange);
+                        width: ${barWidth};
+                        background-color: ${barActualFill};
                         border-radius: 5px;
                         transition: width 0.5s;
-                    " title="${percentage.toFixed(1)}% of total expenses"></div>
+                    " title="Spent: ${spentPercentageOfBudget.toFixed(1)}%"></div>
+                </div>
+                
+                <div style="text-align: right; margin-top: 4px; font-size: 0.85rem;">
+                    ${varianceText}
                 </div>
             </div>
         `;
     }).join('');
 
     return `
+        <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 12px; color: var(--white-text);">
+            TOTAL EXPENSE BUDGET: ${formatCurrency(totalBudget)}
+        </h3>
         <div id="category-chart-container" style="padding-top: 8px;">
             ${chartBars}
         </div>
@@ -405,12 +607,113 @@ const renderCategoryBreakdownChart = () => {
 
 
 /**
- * Main render function to update the entire application UI structure.
+ * Renders the SVG Donut Chart for category expenses. (Updated to use derived category data)
+ */
+const renderCategoryDonutChart = () => {
+    const sortedExpenses = calculateCategoryExpenses().filter(item => item.amountSpent > 0);
+    const totalExpensesValue = totalExpenses;
+
+    if (totalExpensesValue === 0) {
+        return `
+            <div style="text-align: center; padding: 24px; height: 100%;">
+                <p style="color: var(--subtle-gray); opacity: 0.8; margin-top: 50px;">Log expenses to see category proportion.</p>
+            </div>
+        `;
+    }
+    
+    // Simple color palette for the slices
+    const chartColors = [
+        '#FBA002', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+        '#9966FF', '#FF9F40', '#E7E9ED', '#4D5360', '#6A5ACD'
+    ];
+
+    const radius = 50;
+    const center = 50;
+    const circumference = 2 * Math.PI * radius;
+    let cumulativePercent = 0;
+
+    const slices = sortedExpenses.slice(0, 7).map((item, index) => {
+        const percent = item.amountSpent / totalExpensesValue;
+        const segmentLength = percent * circumference;
+        const dashoffset = circumference - (cumulativePercent * circumference);
+        const color = chartColors[index % chartColors.length];
+        
+        cumulativePercent += percent;
+
+        // Path is rotated based on the previous segments
+        return `
+            <circle cx="${center}" cy="${center}" r="${radius}" fill="transparent" stroke="${color}" stroke-width="20"
+                stroke-dasharray="${segmentLength} ${circumference}"
+                stroke-dashoffset="${dashoffset}"
+                style="transform: rotate(-90deg); transform-origin: ${center}px ${center}px;"
+                title="${item.category}: ${percent.toFixed(2) * 100}%" />
+        `;
+    }).join('');
+
+    const legend = sortedExpenses.slice(0, 7).map((item, index) => `
+        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+            <span style="width: 10px; height: 10px; background-color: ${chartColors[index % chartColors.length]}; border-radius: 50%; margin-right: 8px;"></span>
+            <span style="font-size: 0.85rem; color: var(--light-text);">${item.category}: ${(item.amountSpent / totalExpensesValue * 100).toFixed(1)}%</span>
+        </div>
+    `).join('');
+    
+    // Calculate 'Other' category if there are more than 7 categories
+    let otherSlice = '';
+    if (sortedExpenses.length > 7) {
+        const otherAmount = sortedExpenses.slice(7).reduce((sum, item) => sum + item.amountSpent, 0);
+        const otherPercent = otherAmount / totalExpensesValue;
+        const otherColor = chartColors[7];
+        
+        const segmentLength = otherPercent * circumference;
+        const dashoffset = circumference - (cumulativePercent * circumference);
+
+        otherSlice = `
+            <circle cx="${center}" cy="${center}" r="${radius}" fill="transparent" stroke="${otherColor}" stroke-width="20"
+                stroke-dasharray="${segmentLength} ${circumference}"
+                stroke-dashoffset="${dashoffset}"
+                style="transform: rotate(-90deg); transform-origin: ${center}px ${center}px;"
+                title="Other: ${otherPercent.toFixed(2) * 100}%" />
+        `;
+
+        legend += `
+            <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                <span style="width: 10px; height: 10px; background-color: ${otherColor}; border-radius: 50%; margin-right: 8px;"></span>
+                <span style="font-size: 0.85rem; color: var(--light-text);">Other: ${(otherPercent * 100).toFixed(1)}%</span>
+            </div>
+        `;
+    }
+
+
+    return `
+        <div style="display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 20px; width: 100%; flex-wrap: wrap;">
+            <div style="width: 150px; height: 150px; flex-shrink: 0;">
+                <svg viewBox="0 0 100 100" width="100%" height="100%">
+                    <circle cx="${center}" cy="${center}" r="${radius}" fill="transparent" stroke="var(--olive-tint)" stroke-width="20" />
+                    ${slices}
+                    ${otherSlice}
+                    <text x="${center}" y="${center + 5}" text-anchor="middle" dominant-baseline="middle" style="font-size: 10px; font-weight: 800; fill: var(--white-text);">
+                        ${formatCurrency(totalExpensesValue)}
+                    </text>
+                </svg>
+            </div>
+            <div style="padding: 10px; max-width: 50%; min-width: 150px;">
+                <h4 style="margin-top: 0; color: var(--primary-orange);">Top Expense Categories</h4>
+                ${legend}
+            </div>
+        </div>
+    `;
+};
+
+
+/**
+ * Main render function to update the entire application UI structure. (Updated to use totalBudget)
  */
 const renderApp = () => {
-    const { totalIncome: inc, totalExpenses: exp, netFlow: flow, budgetVariance: variance } = calculateTotals();
+    const { totalIncome: inc, totalExpenses: exp, netFlow: flow, totalBudget: budget } = calculateTotals();
     const isNetFlowPositive = flow >= 0;
     const netFlowCardClasses = isNetFlowPositive ? 'net-flow-positive-item' : 'net-flow-negative-item';
+    const totalBudgetVariance = budget - exp;
+    const isOverBudget = totalBudgetVariance < 0;
 
     // Format current cycle month for display
     const displayMonth = new Date(currentCycleMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -428,9 +731,9 @@ const renderApp = () => {
             </div>
             <div id="summary-grid">
                 <div class="summary-item budget-item">
-                    <h2>MONTHLY EXPENSE BUDGET</h2>
+                    <h2>TOTAL MONTHLY BUDGET</h2>
                     <p id="total-budget-display">
-                        ${formatCurrency(monthlyBudget)}
+                        ${formatCurrency(budget)}
                     </p>
                 </div>
                 <div class="summary-item income-item-summary">
@@ -445,10 +748,10 @@ const renderApp = () => {
                         ${formatCurrency(exp)}
                     </p>
                 </div>
-                <div class="summary-item ${netFlowCardClasses}">
-                    <h2>NET FLOW (Income - Expense)</h2>
+                <div class="summary-item ${isOverBudget ? 'net-flow-negative-item' : 'net-flow-positive-item'}">
+                    <h2>BUDGET REMAINING</h2>
                     <p id="net-flow-display">
-                        ${isNetFlowPositive ? '' : '-'}${formatCurrency(flow)}
+                        ${isOverBudget ? '-' : ''}${formatCurrency(totalBudgetVariance)}
                     </p>
                 </div>
             </div>
@@ -496,7 +799,8 @@ const renderActiveView = () => {
 
         // Attach logic
         document.getElementById('set-cycle-month-btn').addEventListener('click', setCycleMonth);
-        renderBudgetSetter(monthlyBudget === 0);
+        // Renders the Category Budget Setter
+        renderCategoryBudgetSetter(false); 
         document.getElementById('add-transaction-form').addEventListener('submit', addTransaction);
         
         // Default to today's date
@@ -504,8 +808,11 @@ const renderActiveView = () => {
 
         document.getElementById('finalize-month-btn').addEventListener('click', finalizeMonth);
         
-        // Render the category chart and transaction list
-        document.getElementById('category-breakdown-container').innerHTML = renderCategoryBreakdownChart();
+        // Render the charts and transaction list
+        document.getElementById('category-breakdown-container').innerHTML = renderCategoryBreakdownChart(); 
+        
+        setupTransactionTypeListener(); 
+        
         renderTransactionHistory();
 
     } else {
@@ -525,7 +832,7 @@ const setCycleMonth = () => {
     }
 };
 
-// --- Current Month Dashboard Components ---
+// --- Current Month Dashboard Components (Updated) ---
 
 const renderCurrentMonthManager = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -533,14 +840,6 @@ const renderCurrentMonthManager = () => {
         month: 'long',
         year: 'numeric'
     });
-
-    // Generate Category Options
-    const categoryOptions = categories.map(cat => 
-        `<option value="${cat}">${cat}</option>`
-    ).join('');
-    
-    // Default selected category for expense
-    const defaultExpenseCategory = categories.find(cat => cat === 'Groceries');
 
     return `
         <div id="current-dashboard-grid">
@@ -569,8 +868,7 @@ const renderCurrentMonthManager = () => {
                             min="0.01" step="0.01" required />
                         
                         <select id="transaction-category-select" required>
-                            <option value="" disabled>Select Category</option>
-                            ${categoryOptions}
+                            <option value="" disabled selected>Select Category</option>
                         </select>
                         
                         <input type="date" id="transaction-date-input" style="grid-column: span 2;" max="${today}" required />
@@ -580,10 +878,10 @@ const renderCurrentMonthManager = () => {
                         </button>
                     </form>
                 </section>
-
+                
                 <section class="card" id="category-breakdown-card">
                     <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--olive-tint); padding-bottom: 8px;">
-                        Category Spending Breakdown (Ranked)
+                        Expense Budget Breakdown
                     </h2>
                     <div id="category-breakdown-container">
                         </div>
@@ -631,166 +929,6 @@ const renderCurrentMonthManager = () => {
                 </section>
 
             </div>
-        </div>
-    `;
-};
-
-const renderBudgetSetter = (isEditing = false) => {
-    const container = document.getElementById('budget-setter-card');
-    if (!container) return;
-
-    const currentBudgetDisplay = formatCurrency(monthlyBudget);
-
-    if (isEditing) {
-        container.innerHTML = `
-            <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--olive-tint); padding-bottom: 8px;">
-                Set/Update Monthly Budget
-            </h2>
-            <div style="display: flex; gap: 8px;">
-                <input type="number" id="new-budget-input" placeholder="Enter New Budget Amount" value="${monthlyBudget.toFixed(2)}"
-                    min="0" step="0.01" style="flex-grow: 1;" required />
-                <button id="save-budget-btn" class="btn btn-success">Save</button>
-            </div>
-        `;
-        document.getElementById('save-budget-btn').addEventListener('click', saveMonthlyBudget);
-    } else {
-        container.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <h2 style="font-size: 0.9rem; opacity:0.7; margin-bottom:4px;">Current Monthly Expense Budget</h2>
-                    <div style="font-size: 1.5rem; font-weight:bold; color:var(--primary-orange);">${currentBudgetDisplay}</div>
-                </div>
-                <button id="edit-budget-btn" class="btn btn-primary">Edit</button>
-            </div>
-        `;
-        document.getElementById('edit-budget-btn').addEventListener('click', () => renderBudgetSetter(true));
-    }
-};
-
-const renderTransactionHistory = () => {
-    const container = document.getElementById('history-list-container');
-    if (!container) return;
-
-    if (currentTransactions.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 24px; color: var(--subtle-gray); opacity: 0.7;">
-                <p>No transactions logged for this month yet.</p>
-            </div>
-        `;
-        return;
-    }
-
-    // Group transactions by date for better viewing
-    const transactionsByDate = currentTransactions.reduce((acc, t) => {
-        const date = t.date;
-        if (!acc[date]) acc[date] = [];
-        acc[date].push(t);
-        return acc;
-    }, {});
-
-    const sortedDates = Object.keys(transactionsByDate).sort((a, b) => new Date(b) - new Date(a));
-
-    container.innerHTML = sortedDates.map(date => {
-        const displayDate = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        
-        const dateTransactions = transactionsByDate[date].map(item => {
-            const isIncome = item.type === 'income';
-            const amountClass = isIncome ? 'income-amount' : 'expense-amount';
-            const sign = isIncome ? '+' : '-';
-            const icon = isIncome ? '<i class="bi bi-arrow-up-circle-fill"></i>' : '<i class="bi bi-arrow-down-circle-fill"></i>';
-
-            return `
-                <div class="transaction-item ${item.type}" style="border-left-width: 6px;">
-                    <div class="transaction-item-details">
-                        <strong>${item.description}</strong>
-                        <small>${item.category} | ${new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
-                    </div>
-                    <div class="transaction-amount-actions" style="display:flex; align-items:center; gap:12px;">
-                        ${icon}
-                        <span class="amount ${amountClass}">${sign} ${formatCurrency(item.amount)}</span>
-                        <button class="delete-btn" onclick="deleteTransaction('${item.id}')" title="Delete Entry">
-                            <i class="bi bi-trash-fill"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div style="margin-bottom: 16px;">
-                <h4 style="margin: 0; padding: 8px 0; border-bottom: 1px dashed var(--olive-tint); font-size: 1rem; color: var(--light-text);">
-                    ${displayDate}
-                </h4>
-                ${dateTransactions}
-            </div>
-        `;
-    }).join('');
-};
-
-
-const renderMonthlyHistory = () => {
-    if (monthlyRecords.length === 0) {
-        return `
-            <div class="card" style="text-align: center; padding: 40px;">
-                <h3 style="color: var(--light-text);">No Monthly Archive Records Found</h3>
-                <p style="opacity: 0.7;">Finalize a month's cycle to see it appear in your history.</p>
-            </div>
-        `;
-    }
-
-    return `
-        <div class="card" id="history-archive-card">
-            ${monthlyRecords.map(record => {
-                const isDeficit = record.netFlow < 0;
-                const displayMonth = new Date(record.month + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-                // Format category summary for display
-                const categoryList = Object.entries(record.categorySummary || {}) // Added null check for old records
-                    .sort(([, a], [, b]) => b - a) // Sort by amount descending
-                    .map(([category, amount]) => `
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.85rem;">
-                            <span>${category}</span>
-                            <span>${formatCurrency(amount)}</span>
-                        </div>
-                    `).join('');
-
-
-                return `
-                    <div class="history-record ${isDeficit ? 'deficit' : ''}">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                            <h3 style="margin:0; font-size:1.2rem;"><i class="bi bi-calendar-event" style="font-size:1.2rem; padding-right: 8px;"></i>${displayMonth}</h3>
-                            <span style="font-weight:bold; font-size:1rem; color:${isDeficit ? 'var(--expense-color)' : 'var(--income-color)'};">
-                                Net Flow: ${isDeficit ? '-' : ''}${formatCurrency(record.netFlow)}
-                            </span>
-                        </div>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:16px; font-size:0.9rem; margin-bottom:12px;">
-                            <div>Budget: <strong style="color: var(--primary-orange);">${formatCurrency(record.startingBudget)}</strong></div>
-                            <div>Income: <strong style="color: var(--income-color);">${formatCurrency(record.totalIncome)}</strong></div>
-                            <div>Expenses: <strong style="color: var(--expense-color);">${formatCurrency(record.totalExpenses)}</strong></div>
-                            <div>Variance: <strong style="color: ${record.startingBudget - record.totalExpenses >= 0 ? 'var(--income-color)' : 'var(--expense-color)'};">${formatCurrency(record.startingBudget - record.totalExpenses)}</strong></div>
-                        </div>
-                        <details>
-                            <summary style="cursor:pointer; color:var(--primary-orange); font-size:0.9rem; font-weight:600;">View Category Summary (${Object.keys(record.categorySummary || {}).length} categories)</summary>
-                            <div style="margin-top:12px; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px;">
-                                <h4 style="margin-top:0; color:var(--light-text); font-size:1rem; border-bottom:1px solid var(--subtle-gray);">Expense Breakdown</h4>
-                                ${categoryList}
-                            </div>
-                        </details>
-                        <details style="margin-top: 10px;">
-                             <summary style="cursor:pointer; color:var(--primary-orange); font-size:0.9rem; font-weight:600;">View ${record.transactions.length} Total Transactions</summary>
-                             <div style="margin-top:12px; background:rgba(0,0,0,0.2); padding:8px; border-radius:8px;">
-                                 ${record.transactions.map(t => `
-                                     <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.85rem;">
-                                         <span style="color: ${t.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'};">[${t.type.toUpperCase()}]</span>
-                                         <span>${t.description} (${t.category})</span>
-                                         <span>${formatCurrency(t.amount)}</span>
-                                     </div>
-                                 `).join('')}
-                             </div>
-                        </details>
-                    </div>
-                    `;
-            }).join('')}
         </div>
     `;
 };
