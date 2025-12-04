@@ -510,6 +510,13 @@ select option {
 }
 
 /* Scrollbar Styling */
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color-light) var(--dark-background);
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
