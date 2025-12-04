@@ -1,240 +1,338 @@
-/* --- Color Palette Variables (Retained) --- */
+/* --- Modern Professional Color Palette --- */
 :root {
-    --primary-orange: #FBA002; /* Bright Orange Accent (Expense/Warning) */
-    --dark-olive: #42533e; /* Deep Background */
-    --dark-background: #252A23; /* Even darker background for cards/dashboard sections */
-    --hover-orange: #e59002;
-    --subtle-gray: #e5e7eb; /* Light Gray for borders/dividers */
-    --success-complement: #20d120; /* Sage Green for positive balance/Income */
+    /* Primary Colors - Deep Navy/Slate */
+    --primary-navy: #1e293b;
+    --primary-slate: #334155;
+    --primary-accent: #0ea5e9; /* Vibrant sky blue accent */
+    --primary-accent-hover: #0284c7;
     
-    /* Tints and Text on Dark Background */
-    --olive-tint: #4A5649; /* Secondary Dark Container background */
-    --light-olive-tint: #5C675B; /* Tertiary Dark background for inputs/buttons */
-    --orange-tint: #FFF3E0; /* Lighter orange tint */
-    --white-text: #ffffff; 
-    --light-text: #e0e0e0; 
-    --box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5); /* Stronger shadow for dark background */
-
-    /* New colors for Expense Monitor */
-    --income-color: var(--success-complement);
-    --expense-color: var(--primary-orange);
-    --net-flow-positive: var(--success-complement);
-    --net-flow-negative: var(--primary-orange);
+    /* Background Colors */
+    --dark-background: #0f172a; /* Deep navy for main background */
+    --card-background: #1e293b; /* Slightly lighter for cards */
+    --card-background-alt: #283548; /* Alternative card background */
+    --input-background: #334155; /* Input field background */
+    
+    /* Text Colors */
+    --white-text: #f8fafc;
+    --light-text: #cbd5e1;
+    --muted-text: #94a3b8;
+    --subtle-gray: #64748b;
+    
+    /* Accent Colors */
+    --success-color: #10b981; /* Emerald green for income/positive */
+    --success-light: #34d399;
+    --warning-color: #f59e0b; /* Amber for warnings */
+    --expense-color: #ef4444; /* Red for expenses */
+    --expense-light: #f87171;
+    
+    /* Semantic Colors */
+    --income-color: var(--success-color);
+    --net-flow-positive: var(--success-color);
+    --net-flow-negative: var(--expense-color);
+    
+    /* Border & Shadow */
+    --border-color: #334155;
+    --border-color-light: #475569;
+    --box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+    --box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+    --box-shadow-glow: 0 0 20px rgba(14, 165, 233, 0.15);
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    --gradient-accent: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --gradient-expense: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    
+    /* Border Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.25s ease;
+    --transition-slow: 0.35s ease;
 }
 
-/* Reset and General Setup (Retained) */
+/* Reset and General Setup */
 * {
     box-sizing: border-box;
 }
 
 body {
-    font-family: 'Inter', sans-serif;
-    background-color: var(--dark-olive); /* Deep Olive for body background */
-    color: var(--light-text); /* Light text on dark background */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--gradient-primary);
+    background-attachment: fixed;
+    color: var(--light-text);
     margin: 0;
-    padding: 20px 10px;
+    padding: 24px 16px;
+    min-height: 100vh;
+    line-height: 1.6;
 }
 
 #app-container {
-    max-width: 1200px; /* Wider for dashboard feel */
+    max-width: 1280px;
     margin: 0 auto;
 }
 
-/* --- Global Card Styling (Retained) --- */
+/* --- Global Card Styling --- */
 .card {
-    background-color: var(--dark-background); 
+    background-color: var(--card-background);
     padding: 24px;
-    border-radius: 16px; /* Smoother corners */
+    border-radius: var(--radius-lg);
     box-shadow: var(--box-shadow);
     margin-bottom: 24px;
-    color: var(--light-text); 
-    transition: background-color 0.3s;
+    color: var(--light-text);
+    border: 1px solid var(--border-color);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.card:hover {
+    box-shadow: var(--box-shadow-lg);
 }
 
 .app-header {
-    font-size: 2rem; 
-    font-weight: 800; 
-    color: var(--white-text); 
-    display: flex; 
-    align-items: center; 
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--white-text);
+    display: flex;
+    align-items: center;
     margin-bottom: 32px;
+    letter-spacing: -0.025em;
 }
 
 .app-header span {
-    color: var(--primary-orange) !important; 
+    color: var(--primary-accent) !important;
+    font-weight: 800;
 }
 
-/* --- Summary Section (Retained) --- */
+/* --- Summary Section --- */
 #summary-section {
-    background-color: var(--dark-background); 
-    display: flex; 
-    flex-direction: column; 
+    background: var(--gradient-primary);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
     gap: 24px;
-    padding: 24px;
+    padding: 28px;
 }
 
-/* Tabs Styling (Retained) */
+/* Tabs Styling */
 #tab-bar {
     display: flex;
     margin-bottom: 24px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
-    background-color: var(--dark-background); 
+    background-color: var(--card-background);
     box-shadow: var(--box-shadow);
+    border: 1px solid var(--border-color);
+    padding: 4px;
+    gap: 4px;
 }
 
 .tab-btn {
     flex-grow: 1;
-    padding: 14px 0;
+    padding: 14px 20px;
     text-align: center;
     font-weight: 600;
+    font-size: 0.95rem;
     cursor: pointer;
     border: none;
     background-color: transparent;
-    color: var(--light-text); 
-    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+    color: var(--muted-text);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-normal);
 }
 
 .tab-btn.active {
-    background-color: var(--primary-orange); 
-    color: var(--dark-olive); /* Dark text on orange */
+    background: var(--gradient-accent);
+    color: var(--white-text);
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
 }
 
 .tab-btn:hover:not(.active) {
-    background-color: var(--olive-tint); 
+    background-color: var(--input-background);
     color: var(--white-text);
 }
 
-/* Inputs and Buttons (Retained) */
-input[type="text"], input[type="number"], input[type="date"], select { /* Added select */
+/* Inputs and Buttons */
+input[type="text"], input[type="number"], input[type="date"], input[type="month"], select {
     width: 100%;
-    padding: 12px;
-    border: 1px solid var(--olive-tint);
-    border-radius: 8px;
-    transition: border-color 0.2s;
-    background-color: var(--light-olive-tint); /* Lighter dark background for input field */
-    color: var(--white-text); 
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--input-background);
+    color: var(--white-text);
+    font-size: 0.95rem;
+    font-family: inherit;
+}
+
+input[type="text"]:focus, input[type="number"]:focus, 
+input[type="date"]:focus, input[type="month"]:focus, select:focus {
+    outline: none;
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
 }
 
 input::placeholder {
-    color: var(--light-text);
-    opacity: 0.6;
+    color: var(--muted-text);
+    opacity: 1;
 }
 
 .btn {
-    padding: 12px;
-    border-radius: 8px;
-    font-weight: 700;
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.95rem;
     cursor: pointer;
-    transition: background-color 0.2s, box-shadow 0.2s;
+    transition: all var(--transition-fast);
     border: none;
+    font-family: inherit;
 }
 
 .btn-success {
-    background-color: var(--success-complement);
+    background: var(--gradient-success);
     color: var(--white-text);
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
 }
 
 .btn-success:hover {
-    background-color: #5c6c24; 
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
 }
 
 .btn-primary {
-    background-color: var(--primary-orange);
-    color: var(--dark-olive);
+    background: var(--gradient-accent);
+    color: var(--white-text);
+    box-shadow: 0 2px 4px rgba(14, 165, 233, 0.2);
 }
 
 .btn-primary:hover:not([disabled]) {
-    background-color: var(--hover-orange);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(14, 165, 233, 0.3);
 }
 
 .btn-primary[disabled] {
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.5;
+    background: var(--input-background);
 }
 
-/* Summary Grid Items - Adapted for dark card background */
+/* Summary Grid Items */
 #summary-grid {
     width: 100%;
     display: grid;
-    /* Changed to 4 columns to include Income and Net Flow */
-    grid-template-columns: repeat(4, 1fr); 
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
 }
 
 .summary-item {
-    padding: 16px;
-    border-radius: 10px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--olive-tint);
-    overflow: hidden; 
+    padding: 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--box-shadow);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    background-color: var(--card-background);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.summary-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--box-shadow-lg);
 }
 
 .summary-item h2 {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    color: var(--light-text);
-    opacity: 0.7;
-    margin-bottom: 4px;
+    color: var(--muted-text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
 }
 
 .summary-item p {
-    font-size: 1.4rem; 
-    font-weight: 800;
+    font-size: 1.5rem;
+    font-weight: 700;
     margin-top: 0;
+    letter-spacing: -0.025em;
 }
 
-/* Color Coding for Summary (Updated for Net Flow) */
+/* Color Coding for Summary */
 .net-flow-positive-item {
     color: var(--white-text);
     border-left: 4px solid var(--net-flow-positive);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%);
 }
 
 .net-flow-negative-item {
     color: var(--white-text);
     border-left: 4px solid var(--net-flow-negative);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, transparent 100%);
 }
 
 .budget-item {
     color: var(--white-text);
+    border-left: 4px solid var(--primary-accent);
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, transparent 100%);
 }
 
 .expense-item-summary {
     color: var(--expense-color);
     border-left: 4px solid var(--expense-color);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, transparent 100%);
+}
+
+.expense-item-summary p {
+    color: var(--expense-light);
 }
 
 .income-item-summary {
     color: var(--income-color);
     border-left: 4px solid var(--income-color);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
 }
 
-/* Visualization (Retained) */
+.income-item-summary p {
+    color: var(--success-light);
+}
+
+/* Visualization */
 #visualization-container {
-    display: flex; 
-    justify-content: center; 
+    display: flex;
+    justify-content: center;
     align-items: center;
+    background-color: var(--card-background);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    border: 1px solid var(--border-color);
 }
 
-/* --- Dashboard Grid Structure for Current View (Retained) --- */
+/* --- Dashboard Grid Structure for Current View --- */
 #current-dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr; /* Default to single column for mobile */
+    grid-template-columns: 1fr;
     gap: 24px;
 }
 
-/* Transaction Item Styling (Updated to show type) */
+/* Transaction Item Styling */
 .transaction-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    background-color: var(--olive-tint); 
-    border-left: 4px solid var(--light-olive-tint);
-    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    background-color: var(--card-background-alt);
+    border-left: 4px solid var(--border-color-light);
+    border-radius: var(--radius-md);
     color: var(--light-text);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all var(--transition-fast);
+}
+
+.transaction-item:hover {
+    transform: translateX(4px);
+    background-color: var(--input-background);
 }
 
 .transaction-item.income {
@@ -249,70 +347,82 @@ input::placeholder {
     display: block;
     font-size: 1rem;
     font-weight: 600;
+    color: var(--white-text);
 }
 
 .transaction-item-details small {
-    color: var(--subtle-gray);
+    color: var(--muted-text);
+    font-size: 0.85rem;
 }
 
-.transaction-amount-actions .amount { /* Added .amount class */
-     font-weight: 700;
-     flex-shrink: 0;
+.transaction-amount-actions .amount {
+    font-weight: 700;
+    flex-shrink: 0;
+    font-size: 1rem;
 }
 
 .transaction-amount-actions .income-amount {
-     color: var(--income-color);
+    color: var(--success-light);
 }
 
 .transaction-amount-actions .expense-amount {
-     color: var(--expense-color);
+    color: var(--expense-light);
 }
 
 .delete-btn {
-    color: var(--subtle-gray);
+    color: var(--muted-text);
     cursor: pointer;
-    font-size: 1.2rem;
-    padding: 4px;
+    font-size: 1.1rem;
+    padding: 6px 8px;
     background: none;
     border: none;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
 }
 
 .delete-btn:hover {
-    color: var(--primary-orange);
+    color: var(--expense-color);
+    background-color: rgba(239, 68, 68, 0.1);
 }
 
-/* History Card Styles - Individual month records (Updated for Month) */
+/* History Card Styles - Individual month records */
 .history-record {
-    padding: 16px;
+    padding: 18px;
     margin-bottom: 12px;
-    border-radius: 8px;
-    background-color: var(--olive-tint); 
-    border-left: 6px solid var(--success-complement);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    cursor: pointer; 
+    border-radius: var(--radius-md);
+    background-color: var(--card-background-alt);
+    border-left: 4px solid var(--success-color);
+    box-shadow: var(--box-shadow);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.history-record:hover {
+    transform: translateX(4px);
+    box-shadow: var(--box-shadow-lg);
 }
 
 .history-record.deficit {
-    border-left: 6px solid var(--primary-orange); 
+    border-left: 4px solid var(--expense-color);
 }
 
-/* Desktop Layout (Dashboard View - Retained) */
+/* Desktop Layout (Dashboard View) */
 @media (min-width: 900px) {
     #summary-section {
-        flex-direction: row; 
+        flex-direction: row;
     }
     #visualization-container {
-        width: 250px; /* Adjusted width for a 4-column summary grid */
+        width: 280px;
         flex-shrink: 0;
     }
     #summary-grid {
-        width: calc(100% - 250px - 24px); /* Fills remaining space */
+        width: calc(100% - 280px - 24px);
         grid-template-columns: 1fr 1fr 1fr 1fr;
     }
 
     /* Dashboard Layout */
     #current-dashboard-grid {
-        grid-template-columns: 2fr 1fr; /* Main content (forms/log) on left, actions on right */
+        grid-template-columns: 2fr 1fr;
     }
 
     /* Action/Settings Column */
@@ -335,4 +445,140 @@ input::placeholder {
     #history-archive-card {
         width: 100%;
     }
+}
+
+/* Tablet Layout */
+@media (max-width: 899px) and (min-width: 600px) {
+    #summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Mobile Layout */
+@media (max-width: 599px) {
+    body {
+        padding: 16px 12px;
+    }
+    
+    .app-header {
+        font-size: 1.35rem;
+        margin-bottom: 24px;
+    }
+    
+    #summary-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .summary-item p {
+        font-size: 1.25rem;
+    }
+    
+    .tab-btn {
+        padding: 12px 8px;
+        font-size: 0.85rem;
+    }
+    
+    .card {
+        padding: 18px;
+    }
+}
+
+/* Additional Component Styles */
+
+/* Form Section Headers */
+.card h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--white-text);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
+}
+
+/* Radio Button Styling */
+input[type="radio"] {
+    accent-color: var(--primary-accent);
+    width: 16px;
+    height: 16px;
+}
+
+/* Select Dropdown */
+select option {
+    background-color: var(--card-background);
+    color: var(--light-text);
+    padding: 8px;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--dark-background);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color-light);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-text);
+}
+
+/* Progress Bar Base */
+.progress-bar-container {
+    height: 12px;
+    background-color: var(--input-background);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width var(--transition-slow);
+}
+
+/* Empty State Styling */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted-text);
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* Card Section Divider */
+.section-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 16px 0;
+}
+
+/* Label Styling */
+label {
+    font-weight: 500;
+    color: var(--light-text);
+    font-size: 0.9rem;
+}
+
+/* Animation for loading */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.loading {
+    animation: pulse 2s ease-in-out infinite;
 }
